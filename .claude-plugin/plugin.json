@@ -1,0 +1,21 @@
+{
+  "name": "just-ship",
+  "version": "1.0.0",
+  "description": "Autonomous multi-agent development pipeline — from ticket to PR in one command",
+  "author": {
+    "name": "Just Ship",
+    "url": "https://just-ship.io"
+  },
+  "homepage": "https://just-ship.io",
+  "repository": "https://github.com/yves-s/just-ship",
+  "license": "MIT",
+  "keywords": [
+    "autonomous-development",
+    "multi-agent",
+    "pipeline",
+    "ticket-to-pr",
+    "claude-code",
+    "agents",
+    "automation"
+  ]
+}

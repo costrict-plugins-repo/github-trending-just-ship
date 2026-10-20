@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+# pre-commit — applies_to: frontmatter validation for just-ship repos.
+#
+# Rejects commits that introduce or modify rule/skill/agent artifacts
+# without an `applies_to:` frontmatter scope marker (T-1021). Arms whenever
+# any framework artifact directory exists in the repo, so it protects both
+# the engine repo and consumer installs.
+#
+# Historical note: a second gate that blocked edits to `.pipeline/`, the
+# `.claude/.pipeline-version` stamp, and the `.claude/.template-hash` stamp
+# previously lived here (T-988). It is gone since T-1064 — the engine repo
+# no longer maintains a `.pipeline/` install copy, so the Source/Install
+# duplication that gate protected against cannot occur. Consumer repos never
+# had the duplication either (they have only `.pipeline/`, no source).
+
+set -euo pipefail
+
+# Emergency override — set this env var to bypass the check for a single
+# commit. Used for scripted bulk rewrites of frontmatter where the
+# validation is redundant.
+if [ "${GIT_ALLOW_INSTALLED_EDIT:-0}" = "1" ]; then
+  exit 0
+fi
+
+# Resolve repo root so the hook works regardless of where git was invoked.
+REPO_ROOT=$(git rev-parse --show-toplevel)
+
+# Aggregate exit code — set to 1 when a violation is found.
+EXIT=0
+
+# ---------------------------------------------------------------------------
+# applies_to: frontmatter validation (T-1021)
+# ---------------------------------------------------------------------------
+# Every artifact (rule, skill, agent definition) must carry an `applies_to:`
+# scope marker so loaders and human readers can tell where it applies. Without
+# the marker, artifacts get loaded into the wrong runtime context and silent
+# drift happens (the T-1014 / CTO Audit Lauf 1 / naked-subagent class of bugs).
+#
+# This gate scans staged additions/modifications under the artifact paths and
+# rejects any without `applies_to:` in their frontmatter. Rename-detection is
+# enabled (-M) so a pure rename without content change passes; a rename WITH
+# modifications is treated as a modification and re-validated.
+#
+# The vocabulary is loose-validated here (presence of `applies_to:` only) —
+# value validation lives in the loader so it can use TypeScript types and
+# stays the single source of truth. The hook only catches the missing-field
+# case, which is the one that breaks the loader at startup.
+#
+# Consumer projects without source artifact dirs (only .claude/ install dirs)
+# still get the `.claude/rules/`, `.claude/skills/`, `.claude/agents/` checks.
+
+ARTIFACT_PATTERNS=(
+  ".claude/rules/.*\\.md$"
+  ".claude/skills/.*\\.md$"
+  ".claude/agents/.*\\.md$"
+  "^skills/.*/SKILL\\.md$"
+  "^agents/.*\\.md$"
+  "^rules/.*\\.md$"
+)
+
+MISSING=()
+while IFS= read -r -d '' file; do
+  matched=0
+  for pattern in "${ARTIFACT_PATTERNS[@]}"; do
+    if [[ "$file" =~ $pattern ]]; then
+      matched=1
+      break
+    fi
+  done
+  [ $matched -eq 0 ] && continue
+
+  # Prefer the staged blob (what's about to be committed) over the working tree
+  # — that way local edits-since-staging don't fool the check.
+  if ! git show ":$file" 2>/dev/null | grep -q "^applies_to:"; then
+    MISSING+=("$file")
+  fi
+done < <(git diff --cached --name-only --diff-filter=ACMR -z)
+
+if [ ${#MISSING[@]} -gt 0 ]; then
+  {
+    echo ""
+    echo "✗ Commit blocked — artifact files are missing applies_to: frontmatter."
+    echo ""
+    echo "Every rule, skill, and agent definition must declare its runtime scope so"
+    echo "loaders can validate where it applies. Without the marker, artifacts get"
+    echo "loaded into the wrong context and silent drift happens (T-1014 class of bugs)."
+    echo ""
+    echo "Files missing applies_to::"
+    for file in "${MISSING[@]}"; do
+      echo "  ${file}"
+    done
+    echo ""
+    echo "Fix by adding to the YAML frontmatter at the top of each file:"
+    echo "  ---"
+    echo "  applies_to: <scope>"
+    echo "  # ... other fields"
+    echo "  ---"
+    echo ""
+    echo "Valid scopes: all-agents, top-level-only, subagents-only, audit-runtime-only,"
+    echo "             pipeline-runtime-only, engine-repo-only, customer-projects-only,"
+    echo "             source-repo-only, install-repo-only, human-readable-only"
+    echo ""
+    echo "See pipeline/lib/applies-to.ts for the vocabulary and validation logic."
+    echo ""
+    echo "Override (emergency only):"
+    echo "  GIT_ALLOW_INSTALLED_EDIT=1 git commit ..."
+  } >&2
+  EXIT=1
+fi
+
+exit $EXIT

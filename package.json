@@ -1,0 +1,7 @@
+{
+  "name": "just-ship",
+  "private": true,
+  "workspaces": [
+    "pipeline"
+  ]
+}

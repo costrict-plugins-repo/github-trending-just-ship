@@ -1,0 +1,96 @@
+# Design: Automatic Documentation Check
+
+**Date:** 2026-03-16
+**Status:** Approved
+
+---
+
+## Problem
+
+After implementing features, documentation (README.md, CLAUDE.md) can become outdated — e.g., a new command is added but the Commands table in README.md is not updated. This currently requires manual follow-up.
+
+## Goal
+
+Add an automatic documentation check step to `/implement` and `/develop` that runs after the QA agent and before the final commit, so doc updates are always bundled into the same PR as the feature.
+
+---
+
+## Where It Lives
+
+New step in both `commands/implement.md` and `commands/develop.md`:
+- **Position:** After QA agent (current step 6 in `/implement`, step 7 in `/develop`), before the final commit
+- **Executor:** Claude itself (orchestrator) — no extra agent
+
+---
+
+## Trigger Logic
+
+After QA, Claude runs both commands to get the full picture of what changed on this branch:
+```bash
+git diff --name-only $(git merge-base main HEAD) HEAD
+git status --porcelain
+```
+
+Combine both outputs for the trigger evaluation.
+
+Based on changed files, Claude determines which docs to check:
+
+| Changed files | Docs to check |
+|---|---|
+| `commands/*.md` (new or modified) | README.md → Commands table + Architecture section |
+| `agents/*.md` (new or modified) | README.md → Agents table |
+| `skills/*.md` (new or modified) | README.md → Skills table |
+| `pipeline/**`, `agents/*.md`, `commands/*.md` | README.md → Workflow diagram |
+| `CLAUDE.md`-relevant structures (pipeline, architecture) | CLAUDE.md |
+| None of the above patterns | Skip entirely |
+
+**Scope:** Only `README.md` and `CLAUDE.md`. Internal docs (`docs/ARCHITECTURE.md`, etc.) are out of scope.
+
+---
+
+## Execution
+
+1. Run `git diff --name-only $(git merge-base main HEAD) HEAD` + `git status --porcelain` to get changed file list
+2. Determine which doc sections are affected (see trigger logic above)
+3. Read affected doc files
+4. Check if entries are present, accurate, and complete
+5. If update needed: apply directly with Edit tool
+6. If no update needed: skip, output `✓ docs — keine Änderungen nötig`
+7. If update applied: output `✓ docs — README.md aktualisiert` (or CLAUDE.md)
+
+Updated doc files are included in the final commit:
+- In `/implement`: doc edits happen before `git add` in step 7 — they are picked up automatically
+- In `/develop`: doc edits must complete **before** `/ship` is invoked in step 8 — `/ship` handles the `git add` and commit, and will include any modified files
+
+---
+
+## Output Format
+
+```
+▶ docs — Dokumentation prüfen
+✓ docs — README.md aktualisiert        ← if changes made
+✓ docs — keine Änderungen nötig       ← if nothing to update
+```
+
+---
+
+## What NOT to Do
+
+- Do not spawn an extra agent for this step
+- Do not create a separate commit for doc changes
+- Do not check docs outside `README.md` and `CLAUDE.md`
+- Do not update docs that are unrelated to the current changes
+
+---
+
+## Files to Modify
+
+- `commands/implement.md`:
+  - Add docs-check as new step 7 (between current QA step 6 and Abschließen)
+  - Abschließen becomes step 8
+  - Update "WICHTIGSTE REGEL" banner: `Alle Schritte 1–6` → `Alle Schritte 1–7`
+
+- `commands/develop.md`:
+  - Add docs-check between Review (step 7) and Ship (current step 8)
+  - Ship becomes step 9
+  - Update "WICHTIGSTE REGEL" banner: `Nach Build-Check (Schritt 6) kommt Review (Schritt 7), dann Ship (Schritt 8)` → `...dann Docs-Check (Schritt 8), dann Ship (Schritt 9)`

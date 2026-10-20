@@ -1,0 +1,67 @@
+{
+  "name": "my-project",
+  "description": "Project description",
+  "mode": "",
+  "stack": {
+    "language": "typescript",
+    "framework": "react",
+    "backend": "node",
+    "package_manager": "pnpm",
+    "platform": "",
+    "variant": ""
+  },
+  "build": {
+    "web": "",
+    "test": "",
+    "dev": "",
+    "dev_port": null,
+    "install": "",
+    "verify": ""
+  },
+  "hosting": {
+    "provider": "",
+    "project_id": "",
+    "team_id": "",
+    "coolify_url": "",
+    "coolify_app_uuid": ""
+  },
+  "shopify": {
+    "store": ""
+  },
+  "skills": {
+    "domain": [],
+    "custom": []
+  },
+  "paths": {
+    "src": "src/",
+    "tests": "tests/"
+  },
+  "supabase": {
+    "project_id": ""
+  },
+  "pipeline": {
+    "workspace_id": "",
+    "project_id": "",
+    "board_url": "",
+    "skip_agents": [],
+    "timeouts": {}
+  },
+  "conventions": {
+    "commit_format": "conventional",
+    "language": "de"
+  },
+  "plugins": {
+    "registries": [],
+    "dependencies": []
+  },
+  "quality_gates": {
+    "enabled": true,
+    "format": true,
+    "lint": true,
+    "ignore_patterns": []
+  },
+  "framework": {
+    "version": "",
+    "updated_at": ""
+  }
+}
